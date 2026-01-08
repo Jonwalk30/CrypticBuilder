@@ -12,6 +12,7 @@ from src.step.word_insertion import WordInsertionStep
 from src.step.hidden import HiddenStep
 from src.step.substitution import SubstitutionStep
 from src.step.concat import ConcatStep
+from src.step.double_definition import DoubleDefinitionStep
 from src.step.step import Step
 from src.llm.llm_scorer import LLMScorer
 from src.llm.indicator_suggestor import IndicatorSuggestor
@@ -25,7 +26,8 @@ class ClueFinder:
         depth_penalty: float = 20.0,
         max_fodder_words: int = 4,
         llm_scorer: LLMScorer | None = None,
-        use_llm: bool = True,
+        use_llm_ranking: bool = False,
+        use_llm_suggestions: bool = True,
         **kwargs
     ):
         self.limit1 = limit1
@@ -34,11 +36,14 @@ class ClueFinder:
         self.depth_penalty = depth_penalty
         self.max_fodder_words = max_fodder_words
         
-        self.llm_scorer = llm_scorer if use_llm else None
-        if use_llm and not self.llm_scorer:
+        self.use_llm_ranking = use_llm_ranking
+        self.use_llm_suggestions = use_llm_suggestions
+
+        self.llm_scorer = llm_scorer
+        if (self.use_llm_ranking or self.use_llm_suggestions) and not self.llm_scorer:
             self.llm_scorer = LLMScorer()
         
-        self.indicator_suggestor = IndicatorSuggestor(self.llm_scorer) if self.llm_scorer else None
+        self.indicator_suggestor = IndicatorSuggestor(self.llm_scorer) if (self.use_llm_suggestions and self.llm_scorer) else None
 
         # Feature toggles
         self.use_positional_selection = kwargs.get("use_positional_selection", True)
@@ -55,6 +60,7 @@ class ClueFinder:
         self.hi = HiddenStep()
         self.su = SubstitutionStep()
         self.co = ConcatStep()
+        self.dd = DoubleDefinitionStep()
         self.ll = LastLetterStep()
         self.ml = MiddleLetterStep()
         self.al = AlternatingLetterStep()
@@ -105,6 +111,9 @@ class ClueFinder:
     def get_middle_letters(self, corpus, target: str, limit: int = None) -> List[Step]:
         return self._get_step(self.ml, corpus, target, limit=limit)
 
+    def get_double_definitions(self, corpus, target: str, limit: int = None) -> List[Step]:
+        return self._get_step(self.dd, corpus, target, limit=limit, llm_scorer=self.llm_scorer)
+
     def get_alternating_letters(self, corpus, target: str, limit: int = None) -> List[Step]:
         return self._get_step(self.al, corpus, target, limit=limit)
 
@@ -139,8 +148,10 @@ class ClueFinder:
                     out.append(nested)
         return out
 
-    def _get_all_standard_steps(self, corpus, target: str, limit: int = None, max_fodder_words: int | None = None) -> List[Step]:
+    def _get_all_standard_steps(self, corpus, target: str, limit: int = None, max_fodder_words: int | None = None, original_target: str | None = None) -> List[Step]:
         out = []
+        t_for_dd = original_target or target
+        
         out.extend(self.get_anagrams(corpus, target, limit=limit, max_fodder_words=max_fodder_words))
         out.extend(self.get_word_deletions(corpus, target, limit=limit))
         out.extend(self.get_word_insertions(corpus, target, limit=limit))
@@ -150,6 +161,7 @@ class ClueFinder:
         out.extend(self.get_reversals(corpus, target, limit=limit))
         out.extend(self.get_substitutions(corpus, target, limit=limit))
         out.extend(self.get_alternating_letters(corpus, target, limit=limit))
+        out.extend(self.get_double_definitions(corpus, t_for_dd, limit=limit))
         if self.use_positional_selection:
             out.extend(self.get_first_letters(corpus, target, limit=limit))
             out.extend(self.get_last_letters(corpus, target, limit=limit))
@@ -159,6 +171,8 @@ class ClueFinder:
 
     def _sort_and_deduplicate(self, steps: List[Step]) -> List[Step]:
         # Sort overall steps by their best available score (combined if nested)
+        # Filter out steps with ridiculously high scores (meaning they failed but were included)
+        steps = [s for s in steps if s.best_score() < 1e9]
         steps.sort(key=lambda s: s.best_score(), reverse=False)
 
         # Deduplicate: for each (source, leftover), keep only the one with the best score
@@ -169,21 +183,23 @@ class ClueFinder:
             if not best_cand:
                 continue
             # Some candidates might not have leftover_sorted (e.g. Anagram)
-            key = (best_cand.source, best_cand.leftover_sorted)
+            key = (s.op, best_cand.source, best_cand.leftover_sorted)
             if key not in seen:
                 seen[key] = True
                 unique_out.append(s)
         return unique_out
 
-    def apply_llm_refinement(self, steps: List[Step], corpus=None, limit: int = 50, score_threshold: float = 40.0) -> List[Step]:
-        if not self.llm_scorer:
+    def apply_llm_refinement(self, steps: List[Step], corpus=None, limit: int = 50, score_threshold: float = 100.0) -> List[Step]:
+        if not self.llm_scorer or not self.use_llm_ranking:
             return steps
             
         # 1. Identify candidates to refine
         to_refine = []
-        count = 0
+        # We'll look through the steps and pick the top 'limit' ones that ARE NOT skipped
         for s in steps:
-            if count >= limit: break
+            if len(to_refine) >= limit: break
+            
+            # Use a higher default threshold or allow all top-K
             if s.best_score() > score_threshold: continue
             
             # Skip AI for positional letters if disabled
@@ -194,7 +210,6 @@ class ClueFinder:
             if not best_c: continue
             
             to_refine.append((s, best_c))
-            count += 1
             
         if not to_refine:
             return steps
@@ -207,7 +222,7 @@ class ClueFinder:
             "FIRST_LETTERS": self.fl, "LAST_LETTERS": self.ll, "MIDDLE_LETTERS": self.ml,
             "ALTERNATING_LETTERS": self.al, "REVERSAL": self.rv, "WORD_INSERTION": self.wi,
             "POSITIONAL_DELETION": self.pd, "LETTER_REPLACEMENT": self.lr, "CHARADE": self.co,
-            "HIDDEN": self.hi, "SUBSTITUTION": self.su
+            "HIDDEN": self.hi, "SUBSTITUTION": self.su, "DOUBLE_DEFINITION": self.dd
         }
         
         # Get synonyms/definitions for the target word to check for fodder-definition context
@@ -242,61 +257,62 @@ class ClueFinder:
             if s.op in ["WORD_DELETION", "WORD_INSERTION"] and c.leftover_words:
                 all_words.add(c.leftover_words[0].split(" (")[0])
         
-        # 1. Fetch all definitions (synonyms) for all words
-        self.llm_scorer.batch_get_definitions(list(all_words))
+        # 1. Fetch definitions for TARGET only (needed for definition context bonus)
+        self.llm_scorer.batch_get_definitions([target])
         
-        # 2. Collect all pairs that apply_llm will likely ask for
+        # 2. Collect all pairs that apply_llm will ask for
         target_syns = [target] + self.llm_scorer.cache.get(f"definitions:{target}", [])[:5]
         all_pairs = []
         all_phrases = []
+        all_sim_pairs = []
         
         for s, c in to_refine:
             source_clean = re.sub(r"\s*\(.*?\)", "", c.source).replace("+", " ").replace(" in ", " ")
             words = source_clean.split()
             all_phrases.append(source_clean)
             
-            # Words and their synonyms
-            words_and_syns = []
-            for w in words:
-                syns = [w] + self.llm_scorer.cache.get(f"definitions:{w}", [])[:5]
-                words_and_syns.append(syns)
-                
-                # Coherence variations (one-word substitution)
-                for syn in syns[1:]:
-                    new_words = [syn if x == w else x for x in words]
-                    all_phrases.append(" ".join(new_words))
+            # Default context for source_clean vs target
+            all_pairs.append((source_clean, target))
             
-            # Pairwise context for each word (or syn) vs each target (or syn)
-            for w_options in words_and_syns:
-                for opt in w_options:
-                    for ts in target_syns:
-                        all_pairs.append((opt, ts))
+            # Definition context pairs
+            for w in words:
+                for ts in target_syns:
+                    all_pairs.append((w, ts))
 
-            # Special case for WORD_DELETION/INSERTION
+            # Special case for DOUBLE_DEFINITION similarity
+            if s.op == "DOUBLE_DEFINITION" and len(words) >= 2:
+                all_sim_pairs.append((words[0], words[1]))
+
+            # Special case for WORD_DELETION/INSERTION parts context
             if s.op in ["WORD_DELETION", "WORD_INSERTION"] and c.leftover_words:
                 best_lo = c.leftover_words[0].split(" (")[0]
-                lo_syns = [best_lo] + self.llm_scorer.cache.get(f"definitions:{best_lo}", [])[:5]
-                
-                container = c.source
-                if s.op == "WORD_INSERTION" and " in " in c.source:
-                    container = c.source.split(" in ")[1]
-                
-                cont_syns = [container] + self.llm_scorer.cache.get(f"definitions:{container}", [])[:5]
-                
-                for ls in lo_syns:
-                    for cs in cont_syns:
-                        all_pairs.append((ls, cs))
+                container = source_clean
+                if s.op == "WORD_INSERTION" and " in " in source_clean:
+                    container = source_clean.split(" in ")[1]
+                all_pairs.append((best_lo, container))
+            
+            # Positional selection target context
+            if s.op in ["FIRST_LETTERS", "LAST_LETTERS", "MIDDLE_LETTERS"]:
+                for w in words:
+                    all_pairs.append((w, target))
 
         # 3. Batch fetch everything
         self.llm_scorer.batch_get_contextual_scores(all_pairs)
         self.llm_scorer.batch_score_coherence(all_phrases)
+        if all_sim_pairs:
+            self.llm_scorer.batch_get_similarity_scores(all_sim_pairs)
 
-    def find_all(self, corpus, target: str, num_chunks: int | None = None, max_fodder_words: int | None = None, enabled_ops: List[str] | None = None) -> List[Step]:
+    def find_all(self, corpus, target: str, num_chunks: int | None = None, max_fodder_words: int | None = None, enabled_ops: List[str] | None = None, progress_callback=None):
         """
         Produces a sorted list of all possible clue options with a larger limit.
+        Yields results incrementally if possible.
         """
         t = str(target).lower()
+        t_clean = t.replace(" ", "")
         out: List[Step] = []
+
+        if progress_callback:
+            progress_callback(0.1, "Initializing search...")
 
         # Increase limits for find_all
         large_limit = self.limit1 * 2
@@ -306,24 +322,64 @@ class ClueFinder:
             enabled_ops = [
                 "ANAGRAM", "WORD_DELETION", "LETTER_DELETION", "FIRST_LETTERS", "LAST_LETTERS",
                 "MIDDLE_LETTERS", "ALTERNATING_LETTERS", "REVERSAL", "WORD_INSERTION", "HIDDEN",
-                "SUBSTITUTION", "CHARADE", "POSITIONAL_DELETION", "LETTER_REPLACEMENT"
+                "SUBSTITUTION", "CHARADE", "POSITIONAL_DELETION", "LETTER_REPLACEMENT", "DOUBLE_DEFINITION"
             ]
 
-        if num_chunks is None or num_chunks == 1:
-            # Get all standard steps and filter them
-            std_steps = self._get_all_standard_steps(corpus, t, limit=large_limit, max_fodder_words=max_fodder_words)
-            out.extend([s for s in std_steps if s.op in enabled_ops])
+        # 1-chunk steps
+        if num_chunks is None or num_chunks >= 1:
+            if progress_callback:
+                progress_callback(0.2, "Searching 1-chunk patterns...")
+            
+            # Use a slightly more conservative limit for 1-chunk standard steps
+            # to avoid flooding with low-quality hiddens/positionals.
+            std_limit = self.limit1
+            std_steps = self._get_all_standard_steps(corpus, t_clean, limit=std_limit, max_fodder_words=max_fodder_words, original_target=t)
+            
+            # Restore the original target with spaces for display
+            for s in std_steps:
+                s.target = t
+                for c in s.candidates:
+                    c.produced = t
+
+            filtered_1chunk = [s for s in std_steps if s.op in enabled_ops]
+            out.extend(filtered_1chunk)
             
             # Nested deletions (count as WORD_DELETION for enablement check)
             if "WORD_DELETION" in enabled_ops:
-                out.extend(self.get_nested_deletions(corpus, t, limit=large_limit))
+                nested = self.get_nested_deletions(corpus, t_clean, limit=large_limit)
+                for s in nested:
+                    s.target = t
+                    for c in s.candidates:
+                        c.produced = t
+                out.extend(nested)
 
-        if num_chunks is None or num_chunks > 1:
+            # Yield 1-chunk results immediately
+            if progress_callback:
+                current = self._sort_and_deduplicate(out)
+                progress_callback(0.4, f"Found {len(current)} 1-chunk patterns. Searching 2-chunk...", current)
+
+        # 2+ chunk steps
+        if num_chunks is None or num_chunks >= 2:
             if "CHARADE" in enabled_ops:
-                out.extend(self.get_concats(corpus, t, limit=50, num_chunks=num_chunks))
+                max_n = num_chunks or 3 # Reduced default from 4 to 3 for performance
+                for n in range(2, max_n + 1):
+                    if progress_callback:
+                        current = self._sort_and_deduplicate(out)
+                        progress_callback(0.4 + (0.3 * (n-1)/max_n), f"Searching {n}-chunk patterns...", current)
+                    # Concat handles the target as is
+                    out.extend(self.get_concats(corpus, t, limit=50, num_chunks=n))
 
+        if progress_callback:
+            progress_callback(0.8, "Sorting and deduplicating...")
         final_steps = self._sort_and_deduplicate(out)
+        
+        if progress_callback:
+            progress_callback(0.85, "Applying AI refinement (this may take a moment)...", final_steps)
+        
         final_steps = self.apply_llm_refinement(final_steps, corpus=corpus)
+        
+        if progress_callback:
+            progress_callback(1.0, "Search complete!", final_steps)
         
         return final_steps
 

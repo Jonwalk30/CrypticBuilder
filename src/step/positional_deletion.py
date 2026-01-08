@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import List, Tuple
-from src.corpus.corpus import corpus as corpus_df
+from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 
 class PositionalDeletionStep(BaseStepGenerator):

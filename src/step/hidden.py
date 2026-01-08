@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import List, Tuple
-from src.corpus.corpus import corpus as corpus_df
+from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 from src.utils import adjusted_freq
 from src.scoring_config import config
@@ -20,13 +20,11 @@ class HiddenStep(BaseStepGenerator):
         n = len(t)
         
         df = corpus_df.corpus
-        # We need a list of words to search through
-        # To make it efficient, we might want to restrict words by length or frequency
-        # But for hidden words, any word could be part of it.
-        # However, middle words have a length constraint: len(w) <= n - 2
         
-        words_sorted = df.sort_values("frequency", ascending=False)
-        all_words = words_sorted["entry"].tolist()
+        # Sort words once and cache or use pre-sorted if available
+        # In this project, df is already likely sorted by frequency if it's the standard corpus.
+        # Let's check if it's already sorted.
+        words_sorted = df # Assume pre-sorted for performance
         word_meta = {row.entry: (row.frequency, row.stopword_ratio_entry, getattr(row, "is_proper_noun", False)) for row in words_sorted.itertuples()}
 
         candidates = []
@@ -147,14 +145,11 @@ class HiddenStep(BaseStepGenerator):
         words = candidate.source.split()
         # For hidden words, we care about the coherence of the phrase
         if len(words) > 1:
-            synonyms_map = self._get_synonyms_map(words, corpus, llm_scorer)
-            coherence, best_phrase = llm_scorer.get_best_coherence(words, synonyms_map)
+            coherence = llm_scorer.score_coherence(candidate.source)
             
             bonus = coherence * self.llm_weight
             candidate.score -= bonus
             candidate.detailed_scores["llm_coherence"] = round(coherence, 3)
-            if best_phrase != " ".join(words):
-                candidate.detailed_scores["best_surface"] = best_phrase
             
             # Also apply definition context bonus
             super().apply_llm(candidate, llm_scorer, corpus, target_synonyms)

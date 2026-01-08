@@ -78,3 +78,6 @@ middle_letter:
 
 positional_deletion:
   op_penalty: 10.0
+
+double_definition:
+  op_penalty: 5.0

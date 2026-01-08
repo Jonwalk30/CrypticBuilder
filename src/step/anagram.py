@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import List
-from src.corpus.corpus import corpus as corpus_df
+from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 from src.utils import sort_word, adjusted_freq
 from src.scoring_config import config
@@ -64,6 +64,10 @@ class AnagramStep(BaseStepGenerator):
 
     def _find_multi_word_combinations(self, corpus, target: str, target_sig: str, max_words: int, limit: int, llm_scorer=None) -> List[Candidate]:
         from src.utils import multiset_contains, multiset_leftover_sorted
+        import time
+        
+        start_time = time.time()
+        timeout = 2.0 # 2 seconds max for combinations search
         
         # Pre-filter signatures that are subsets of target_sig
         sub_sigs = []
@@ -74,10 +78,7 @@ class AnagramStep(BaseStepGenerator):
                 best_info = corpus._anagram_best[sig]
                 
                 # Filter out obscure words from multi-word fodder to keep surface readable
-                # 2-letter words must be very common (Zipf > 4.0)
-                # 3+ letter words must be reasonably common (Zipf > 3.0)
-                # This helps avoid obscure abbreviations or names like 'ca' or 'petr'
-                if len(best_info["best_word"]) <= 2 and best_info["best_freq"] < 4.0:
+                if len(best_info["best_word"]) <= 2 and best_info["best_freq"] < 4.5: # Slightly stricter for very short words
                     continue
                 if len(best_info["best_word"]) > 2 and best_info["best_freq"] < 3.0:
                     continue
@@ -92,12 +93,15 @@ class AnagramStep(BaseStepGenerator):
         sub_sigs.sort(key=lambda x: x[1])
         
         # Limit to top sub_sigs to prevent combinatorial explosion
-        sub_sigs = sub_sigs[:150] 
+        sub_sigs = sub_sigs[:120] # Slightly reduced from 150
         
         combinations = []
         multi_word_penalty_per_word = 2.0 # Penalty for each word beyond the first
 
         def search(remaining_sig, current_combination, current_cost, start_index, current_freqs):
+            if time.time() - start_time > timeout:
+                return
+
             if not remaining_sig:
                 if len(current_combination) > 1:
                     detailed = {"freqs": [round(f, 2) for f in current_freqs]}
@@ -108,10 +112,14 @@ class AnagramStep(BaseStepGenerator):
                 return
             
             for i in range(start_index, len(sub_sigs)):
+                if len(combinations) >= limit:
+                    return
+                if time.time() - start_time > timeout:
+                    return
+
                 sig, cost, best_word = sub_sigs[i]
                 if multiset_contains(remaining_sig, sig):
                     # We need the adjusted frequency for detailed scores
-                    # cost is (20.0 - adj), so adj = 20.0 - cost
                     adj = 20.0 - cost
                     search(
                         multiset_leftover_sorted(remaining_sig, sig),
@@ -120,8 +128,6 @@ class AnagramStep(BaseStepGenerator):
                         i,
                         current_freqs + [adj]
                     )
-                    if len(combinations) >= limit:
-                        return
         
         search(target_sig, [], 0, 0, [])
         
@@ -144,14 +150,11 @@ class AnagramStep(BaseStepGenerator):
         words = candidate.source.split()
         if len(words) > 1:
             # Multi-word anagram: coherence bonus (making sense as a sentence)
-            synonyms_map = self._get_synonyms_map(words, corpus, llm_scorer)
-            coherence, best_phrase = llm_scorer.get_best_coherence(words, synonyms_map)
+            coherence = llm_scorer.score_coherence(candidate.source)
             
             bonus = coherence * self.llm_weight
             candidate.score -= bonus
             candidate.detailed_scores["llm_coherence"] = round(coherence, 3)
-            if best_phrase != " ".join(words):
-                candidate.detailed_scores["best_surface"] = best_phrase
             
             # Also apply definition context bonus for multi-word
             super().apply_llm(candidate, llm_scorer, corpus, target_synonyms)

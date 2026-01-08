@@ -1,5 +1,5 @@
 from __future__ import annotations
-from src.corpus.corpus import corpus as corpus_df
+from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 
 class ReversalStep(BaseStepGenerator):

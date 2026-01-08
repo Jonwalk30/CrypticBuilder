@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Tuple, List
-from src.corpus.corpus import corpus as corpus_df
+from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 from src.utils import adjusted_freq, sort_word
 from src.scoring_config import config
@@ -113,12 +113,12 @@ class WordInsertionStep(BaseStepGenerator):
                 }
                 
                 # Source display: if it's literal, use the literal. 
-                # If it's multiset, show the signature or something indicating it's an anagram.
+                # If it's multiset, show the word in parentheses.
+                best_inner = final_inner_words[0]
                 if strictness == "SUBSTRING":
-                    display_inner = inner_raw
-                    source = f"{display_inner} in {outer}"
+                    source = f"{best_inner} in {outer}"
                 else:
-                    source = f"({inner_raw}) in {outer}"
+                    source = f"({best_inner}) in {outer}"
 
                 cand = Candidate(
                     source=source,
@@ -149,29 +149,12 @@ class WordInsertionStep(BaseStepGenerator):
             # Use the first leftover word
             best_iw = candidate.leftover_words[0].split(" (")[0]
             
-            words = [outer, best_iw]
-            synonyms_map = self._get_synonyms_map(words, corpus, llm_scorer)
-            
-            # Check best context among synonyms
-            best_context = llm_scorer.get_contextual_score(outer, best_iw)
-            
-            outer_options = [outer]
-            if outer in synonyms_map: outer_options.extend(synonyms_map[outer])
-            
-            inner_options = [best_iw]
-            if best_iw in synonyms_map: inner_options.extend(synonyms_map[best_iw])
-            
-            for oo in outer_options:
-                for io in inner_options:
-                    c_score = llm_scorer.get_contextual_score(oo, io)
-                    if c_score > best_context:
-                        best_context = c_score
-                        if oo != outer or io != best_iw:
-                            candidate.detailed_scores["best_surface"] = f"{io} in {oo}"
+            # Check context (ONLY original words)
+            context = llm_scorer.get_contextual_score(outer, best_iw)
 
-            bonus = best_context * self.llm_weight
+            bonus = context * self.llm_weight
             candidate.score -= bonus
-            candidate.detailed_scores["llm_context"] = round(best_context, 3)
+            candidate.detailed_scores["llm_context"] = round(context, 3)
             
             # Also check for definition context
             super().apply_llm(candidate, llm_scorer, corpus, target_synonyms)

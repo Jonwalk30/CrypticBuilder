@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import List, Tuple
-from src.corpus.corpus import corpus as corpus_df
+from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 from src.utils import adjusted_freq
 from src.scoring_config import config
@@ -111,14 +111,11 @@ class CharadeStep(BaseStepGenerator):
         phrase = source.replace(" + ", " ")
         words = phrase.split()
         if len(words) > 1:
-            synonyms_map = self._get_synonyms_map(words, corpus, llm_scorer)
-            coherence, best_phrase = llm_scorer.get_best_coherence(words, synonyms_map)
+            coherence = llm_scorer.score_coherence(phrase)
             
             bonus = coherence * self.llm_weight
             candidate.score -= bonus
             candidate.detailed_scores["llm_coherence"] = round(coherence, 3)
-            if best_phrase != phrase:
-                candidate.detailed_scores["best_surface"] = best_phrase
             
             # Also apply definition context bonus
             super().apply_llm(candidate, llm_scorer, corpus, target_synonyms)

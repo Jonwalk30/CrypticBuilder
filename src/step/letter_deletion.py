@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Tuple, List
 from collections import Counter
 
-from src.corpus.corpus import corpus as corpus_df
+from src.corpus import corpus as corpus_df
 from src.step.step import Strictness, Step, Candidate, BaseStepGenerator
 from src.utils import adjusted_freq, best_leftover_meta, sort_word, subsequence_match_indices, leftover_from_indices, \
     multiset_contains, multiset_leftover_sorted
@@ -116,9 +116,14 @@ class WordDeletionStep(BaseStepGenerator):
             score, leftover_words, detailed = self._score(corpus, row, leftover_sorted, strictness, t, llm_scorer)
             if not leftover_words:
                 continue
+            
+            # Format source to show subtraction: container - removed
+            removed = leftover_words[0].split(" (")[0]
+            source_display = f"{container} - [{removed}]"
+
             step.candidates.append(
                 Candidate(
-                    source=container,
+                    source=source_display,
                     produced=t,
                     leftover_sorted=leftover_sorted,
                     leftover_words=leftover_words,
@@ -151,9 +156,14 @@ class WordDeletionStep(BaseStepGenerator):
             score, leftover_words, detailed = self._score(corpus, row, leftover_sorted, "MULTISET", t, llm_scorer)
             if not leftover_words:
                 continue
+
+            # Format source to show subtraction: container - removed
+            removed = leftover_words[0].split(" (")[0]
+            source_display = f"{container} - ({removed})"
+
             step.candidates.append(
                 Candidate(
-                    source=container,
+                    source=source_display,
                     produced=t,
                     leftover_sorted=leftover_sorted,
                     leftover_words=leftover_words,
@@ -180,29 +190,12 @@ class WordDeletionStep(BaseStepGenerator):
         best_lo = candidate.leftover_words[0].split(" (")[0]
         container = candidate.source
         
-        words = [container, best_lo]
-        synonyms_map = self._get_synonyms_map(words, corpus, llm_scorer)
-        
-        # Check best context among synonyms
-        best_context = llm_scorer.get_contextual_score(container, best_lo)
-        
-        cont_options = [container]
-        if container in synonyms_map: cont_options.extend(synonyms_map[container])
-        
-        lo_options = [best_lo]
-        if best_lo in synonyms_map: lo_options.extend(synonyms_map[best_lo])
-        
-        for co in cont_options:
-            for lo in lo_options:
-                c_score = llm_scorer.get_contextual_score(co, lo)
-                if c_score > best_context:
-                    best_context = c_score
-                    if co != container or lo != best_lo:
-                        candidate.detailed_scores["best_surface"] = f"{co} vs {lo}"
+        # Check context (ONLY original words)
+        context = llm_scorer.get_contextual_score(container, best_lo)
 
-        bonus = best_context * self.llm_weight
+        bonus = context * self.llm_weight
         candidate.score -= bonus
-        candidate.detailed_scores["llm_context"] = round(best_context, 3)
+        candidate.detailed_scores["llm_context"] = round(context, 3)
         
         # Also check for definition context
         super().apply_llm(candidate, llm_scorer, corpus, target_synonyms)

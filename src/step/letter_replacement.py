@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from src.corpus.corpus import corpus as corpus_df
+from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 from src.utils import adjusted_freq
 from src.scoring_config import config

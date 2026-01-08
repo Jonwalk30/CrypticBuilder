@@ -1,11 +1,12 @@
 from __future__ import annotations
 from src.finder.finder import ClueFinder
-from src.corpus.corpus import corpus
+from src.corpus import corpus
 from src.utils import CluePresenter
 
-USE_LLM = True # Switch this to False to disable LLM scoring
+USE_LLM_RANKING = False
+USE_LLM_SUGGESTIONS = True
 
-finder = ClueFinder(max_fodder_words=3, use_llm=USE_LLM)
+finder = ClueFinder(max_fodder_words=3, use_llm_ranking=USE_LLM_RANKING, use_llm_suggestions=USE_LLM_SUGGESTIONS)
 target_word = ("borders")
 
 for n in [1, 2, 3]:

@@ -1,4 +1,4 @@
-from src.corpus.corpus import corpus
+from src.corpus import corpus
 from src.step.positional_deletion import PositionalDeletionStep
 
 pd = PositionalDeletionStep()

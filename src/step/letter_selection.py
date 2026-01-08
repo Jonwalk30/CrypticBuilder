@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import List, Callable
+import pandas as pd
 
 from src.step.step import Step, Candidate, BaseStepGenerator
 from src.utils import adjusted_freq
@@ -19,8 +20,13 @@ class PositionalLetterStep(BaseStepGenerator):
 
         self.per_word_penalty = kwargs.get("per_word_penalty", c.get("per_word_penalty", 5.0))
         self.max_per_letter = kwargs.get("max_per_letter", c.get("max_per_letter", 50))
+        self._matching_cache = {}
 
     def _words_matching(self, corpus, ch: str, mode: str) -> List[tuple[str, float]]:
+        cache_key = (ch, mode)
+        if cache_key in self._matching_cache:
+            return self._matching_cache[cache_key]
+
         df = corpus.corpus
         
         if mode == "FIRST":
@@ -30,30 +36,21 @@ class PositionalLetterStep(BaseStepGenerator):
         elif mode == "MIDDLE":
             # Middle letter optimization
             n = df["entry"].str.len()
-            # We can't easily use n // 2 in str.get() because it's not a scalar.
-            # But we can iterate over possible lengths if they are limited, 
-            # or just use a more vectorized approach if possible.
-            # Actually, str.get(index) accepts a series? No, it takes an integer.
-            
-            # Let's use a simpler vectorized approach for Middle
             # We filter by common lengths (e.g. 1 to 20)
-            masks = []
+            mask = pd.Series(False, index=df.index)
             for length in range(1, 21):
                 m_len = (n == length)
+                if not m_len.any(): continue
                 if length % 2 == 1:
                     idx = length // 2
-                    masks.append(m_len & (df["entry"].str[idx] == ch))
+                    mask |= (m_len & (df["entry"].str[idx] == ch))
                 else:
                     idx1 = length // 2
                     idx2 = length // 2 - 1
-                    masks.append(m_len & ((df["entry"].str[idx1] == ch) | (df["entry"].str[idx2] == ch)))
-            
-            mask = masks[0]
-            for m in masks[1:]:
-                mask |= m
+                    mask |= (m_len & ((df["entry"].str[idx1] == ch) | (df["entry"].str[idx2] == ch)))
         else:
             # Fallback
-            mask = [False] * len(df)
+            mask = pd.Series(False, index=df.index)
 
         hits = df[mask][["entry", "frequency", "stopword_ratio_entry", "is_proper_noun"]]
         
@@ -63,6 +60,8 @@ class PositionalLetterStep(BaseStepGenerator):
             adj = self._get_adj(r)
             out.append((w, adj))
         out.sort(key=lambda x: x[1], reverse=True)
+        
+        self._matching_cache[cache_key] = out
         return out
 
     def generate_base(self, corpus, target: str, mode: str, limit: int = 200, llm_scorer=None) -> Step:
@@ -111,24 +110,15 @@ class PositionalLetterStep(BaseStepGenerator):
         t = candidate.produced
         
         phrase_words = source.split()
-        synonyms_map = self._get_synonyms_map(phrase_words, corpus, llm_scorer)
         
-        # 1. Coherence within the phrase (making sense as a sentence)
-        llm_coherence, best_phrase = llm_scorer.get_best_coherence(phrase_words, synonyms_map)
+        # 1. Coherence within the phrase (ONLY original words)
+        llm_coherence = llm_scorer.score_coherence(source)
 
-        # 2. Context with the target word (&lit potential)
+        # 2. Context with the target word (&lit potential) (ONLY original words)
         tc_scores = []
         for w in phrase_words:
-            options = [w]
-            if w in synonyms_map:
-                options.extend(synonyms_map[w])
-            
-            best_w_context = 0.0
-            for opt in options:
-                c_score = llm_scorer.get_contextual_score(opt, t)
-                if c_score > best_w_context:
-                    best_w_context = c_score
-            tc_scores.append(best_w_context)
+            c_score = llm_scorer.get_contextual_score(w, t)
+            tc_scores.append(c_score)
             
         target_context = sum(tc_scores) / len(tc_scores) if tc_scores else 0.0
         
@@ -137,10 +127,8 @@ class PositionalLetterStep(BaseStepGenerator):
         candidate.score -= llm_bonus
         candidate.detailed_scores["llm_coherence"] = round(llm_coherence, 3)
         candidate.detailed_scores["target_context"] = round(target_context, 3)
-        if best_phrase != source:
-            candidate.detailed_scores["best_surface"] = best_phrase
         
-        # 3. Definition Context bonus
+        # 3. Definition Context bonus (calls super().apply_llm)
         super().apply_llm(candidate, llm_scorer, corpus, target_synonyms)
 
 class FirstLetterStep(PositionalLetterStep):

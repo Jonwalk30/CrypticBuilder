@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Literal, Dict
 
-from src.corpus.corpus import Corpus
+from src.corpus import Corpus
 from src.utils import pretty
 from src.scoring_config import config
 
@@ -39,6 +39,14 @@ class Step:
             return float(self.combined_score)
         b = self.best()
         return float(b.score) if b else 1e18
+
+    @property
+    def complexity(self) -> int:
+        if self.op == "CHARADE":
+            return len(self.chunk_steps)
+        if self.child:
+            return 2 # Nested is currently 2-step
+        return 1
 
 
 class BaseStepGenerator:
@@ -79,18 +87,11 @@ class BaseStepGenerator:
         source_clean = source.split(" (")[0]
         target = candidate.produced
 
-        # 1. Context bonus (using synonyms if available)
+        # 1. Context bonus (using the words themselves)
         words = source_clean.replace("+", " ").replace(" in ", " ").split()
-        synonyms_map = self._get_synonyms_map(words, corpus, llm_scorer)
         
-        # Check best context score among synonyms
+        # Check context score for the whole cleaned source against target
         best_context_score = llm_scorer.get_contextual_score(source_clean, target)
-        for w in words:
-            if w in synonyms_map:
-                for syn in synonyms_map[w]:
-                    c_score = llm_scorer.get_contextual_score(syn, target)
-                    if c_score > best_context_score:
-                        best_context_score = c_score
 
         bonus = best_context_score * self.llm_weight
         candidate.score -= bonus
@@ -100,16 +101,10 @@ class BaseStepGenerator:
         if target_synonyms:
             best_def_match = 0.0
             for w in words:
-                # Check the word itself and its synonyms
-                options = [w]
-                if w in synonyms_map:
-                    options.extend(synonyms_map[w])
-                
-                for opt in options:
-                    for ts in target_synonyms:
-                        match_score = llm_scorer.get_contextual_score(opt, ts)
-                        if match_score > best_def_match:
-                            best_def_match = match_score
+                for ts in target_synonyms:
+                    match_score = llm_scorer.get_contextual_score(w, ts)
+                    if match_score > best_def_match:
+                        best_def_match = match_score
             
             if best_def_match > 0.5:
                 # Reward contextual fodder-definition connection
