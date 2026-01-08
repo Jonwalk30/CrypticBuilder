@@ -9,6 +9,9 @@ dependencies = [
     "wordfreq",
     "openai",
     "streamlit",
+    "toml",
+    "pyarrow",
+    "PyYAML",
 ]
 
 [tool.black]

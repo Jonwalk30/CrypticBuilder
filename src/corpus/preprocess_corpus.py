@@ -85,8 +85,8 @@ def preprocess_wordlist_csv(
 if __name__ == "__main__":
     # Example usage:
     preprocess_wordlist_csv(
-        csv_path="/Users/jonathanwalker/Desktop/en.csv",
-        out_parquet_path="/Users/jonathanwalker/Desktop/corpus.parquet",
+        csv_path="en.csv",
+        out_parquet_path="corpus.parquet",
         lang="en",
         min_len=1,
         min_freq=0,

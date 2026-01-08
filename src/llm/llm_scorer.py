@@ -16,6 +16,15 @@ class LLMScorer:
         self.executor = ThreadPoolExecutor(max_workers=10)
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
+            # Try streamlit secrets first if available
+            try:
+                import streamlit as st
+                if "OPENAI_API_KEY" in st.secrets:
+                    api_key = st.secrets["OPENAI_API_KEY"]
+            except Exception:
+                pass
+
+        if not api_key:
             # Fallback to secrets.toml
             try:
                 import toml
