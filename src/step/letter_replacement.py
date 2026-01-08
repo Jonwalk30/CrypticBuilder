@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import Counter
-from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 from src.utils import adjusted_freq
 from src.scoring_config import config
@@ -20,6 +19,7 @@ class LetterReplacementStep(BaseStepGenerator):
         self.multi_replacement_exponent = kwargs.get("multi_replacement_exponent", c.get("multi_replacement_exponent", 2.0))
 
     def generate(self, corpus, target: str, *, limit: int = 200, forbidden_source: str | None = None, llm_scorer=None) -> Step:
+        from src.corpus import corpus as corpus_df
         t = str(target).lower()
         df = corpus_df.corpus
         step = Step(op=self.name, target=t)
@@ -30,8 +30,8 @@ class LetterReplacementStep(BaseStepGenerator):
         if forbidden_source:
             possible_sources = possible_sources[possible_sources["entry"] != forbidden_source.lower()]
         
-        for _, row in possible_sources.iterrows():
-            source = str(row["entry"])
+        for row in possible_sources.itertuples(index=False):
+            source = str(row.entry)
             if source == t:
                 continue
             

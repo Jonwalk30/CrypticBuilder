@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import List
-from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 from src.utils import sort_word, adjusted_freq, get_word_display
 from src.scoring_config import config
@@ -14,6 +13,7 @@ class AnagramStep(BaseStepGenerator):
         self.allow_identity = kwargs.get("allow_identity", c.get("allow_identity", False))
 
     def generate(self, corpus, target: str, *, limit: int = 200, max_fodder_words: int = 1, forbidden_source: str | None = None, llm_scorer=None) -> Step:
+        from src.corpus import corpus as corpus_df
         t = str(target).lower()
         sig = sort_word(t)
         step = Step(op=self.name, target=t)

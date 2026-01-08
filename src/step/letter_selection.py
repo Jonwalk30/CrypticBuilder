@@ -55,8 +55,8 @@ class PositionalLetterStep(BaseStepGenerator):
         hits = df[mask][["entry", "frequency", "stopword_ratio_entry", "is_proper_noun"]]
         
         out = []
-        for _, r in hits.head(self.max_per_letter).iterrows():
-            w = str(r["entry"])
+        for r in hits.head(self.max_per_letter).itertuples(index=False):
+            w = str(r.entry)
             adj = self._get_adj(r)
             out.append((w, adj))
         out.sort(key=lambda x: x[1], reverse=True)
@@ -175,8 +175,8 @@ class AlternatingLetterStep(BaseStepGenerator):
         # Even
         mask_even = (df["entry"].str.len().isin([2*n - 1, 2*n])) & (df["entry"].str[::2] == t)
         candidates_even = df[mask_even]
-        for _, row in candidates_even.iterrows():
-            w = str(row["entry"])
+        for row in candidates_even.itertuples(index=False):
+            w = str(row.entry)
             adj = self._get_adj(row)
             
             cost = (20.0 - adj) + self.op_penalty
@@ -186,8 +186,8 @@ class AlternatingLetterStep(BaseStepGenerator):
         # Odd
         mask_odd = (df["entry"].str.len().isin([2*n, 2*n + 1])) & (df["entry"].str[1::2] == t)
         candidates_odd = df[mask_odd]
-        for _, row in candidates_odd.iterrows():
-            w = str(row["entry"])
+        for row in candidates_odd.itertuples(index=False):
+            w = str(row.entry)
             adj = self._get_adj(row)
             
             cost = (20.0 - adj) + self.op_penalty

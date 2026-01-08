@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import List, Tuple
-from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 from src.utils import adjusted_freq, get_word_display
 from src.scoring_config import config
@@ -22,6 +21,7 @@ class CharadeStep(BaseStepGenerator):
         Finds all ways to split target into 2 or more literal words.
         E.g. "carpet" -> "car" + "pet"
         """
+        from src.corpus import corpus as corpus_df
         t = str(target).lower()
         step = Step(op=self.name, target=t)
         n = len(t)
@@ -135,8 +135,8 @@ class CharadeStep(BaseStepGenerator):
         hits = df[mask]
         
         candidates_found = []
-        for _, row in hits.iterrows():
-            entry = str(row["entry"])
+        for row in hits.itertuples(index=False):
+            entry = str(row.entry)
             if entry.startswith(t):
                 other = entry[len(t):]
                 source = f"{get_word_display(corpus, t)} + {get_word_display(corpus, other)}"
@@ -150,8 +150,7 @@ class CharadeStep(BaseStepGenerator):
                 continue
                 
             # Score based on both words (target is fixed, but its freq matters for the quality of the charade)
-            adj_t = self._get_word_adj(corpus, t)
-            if adj_t is None: continue # Should not happen if target is a word but let's be safe
+            adj_t = self._get_adj(row)
             
             penalty = 0.0
             if len(other) < 3:

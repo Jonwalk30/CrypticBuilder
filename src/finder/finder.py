@@ -65,6 +65,9 @@ class ClueFinder:
         self.ml = MiddleLetterStep()
         self.al = AlternatingLetterStep()
         self.pd = PositionalDeletionStep()
+        
+        # Search cache
+        self._search_cache = {}
 
     def _get_step(self, generator, corpus, target: str, limit: int = None, **kwargs) -> List[Step]:
         l = limit or self.limit1
@@ -308,6 +311,14 @@ class ClueFinder:
         Yields results incrementally if possible.
         """
         t = str(target).lower()
+        
+        # Check cache
+        cache_key = (t, num_chunks, max_fodder_words, tuple(enabled_ops) if enabled_ops else None)
+        if cache_key in self._search_cache:
+            if progress_callback:
+                progress_callback(1.0, "Found in cache!", self._search_cache[cache_key])
+            return self._search_cache[cache_key]
+
         t_clean = t.replace(" ", "")
         out: List[Step] = []
 
@@ -380,6 +391,9 @@ class ClueFinder:
         
         if progress_callback:
             progress_callback(1.0, "Search complete!", final_steps)
+        
+        # Save to cache
+        self._search_cache[cache_key] = final_steps
         
         return final_steps
 

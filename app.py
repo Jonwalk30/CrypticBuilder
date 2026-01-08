@@ -4,7 +4,6 @@ import os
 import json
 import re
 from src.finder.finder import ClueFinder
-from src.corpus import corpus
 from src.utils import pretty
 
 # --- Page Config ---
@@ -267,6 +266,10 @@ with st.sidebar:
         st.success("Cache cleared!")
         st.rerun()
 
+def get_corpus():
+    from src.corpus import corpus
+    return corpus
+
 # --- Finder Initialization ---
 @st.cache_resource
 def get_finder(llm_ranking_on, llm_suggestions_on, positional_on, m_fodder, llm_pos_on):
@@ -278,7 +281,50 @@ def get_finder(llm_ranking_on, llm_suggestions_on, positional_on, m_fodder, llm_
         use_llm_for_positional=llm_pos_on
     )
 
-finder = get_finder(use_llm_ranking, use_llm_suggestions, use_positional, max_fodder, use_llm_for_positional)
+@st.cache_data(show_spinner="Finding best clue patterns...")
+def get_search_results(target_word, num_chunks, max_fodder, use_positional, enabled_ops, use_llm_ranking, use_llm_suggestions, use_llm_for_positional):
+    # This wrapper function is cached by Streamlit
+    from src.corpus import corpus as corpus_obj
+    f = get_finder(use_llm_ranking, use_llm_suggestions, use_positional, max_fodder, use_llm_for_positional)
+    return f.find_all(
+        corpus_obj, 
+        target_word, 
+        num_chunks=num_chunks, 
+        enabled_ops=enabled_ops
+    )
+
+@st.cache_data(show_spinner=False)
+def get_definitions(display_word, _llm_scorer):
+    if not _llm_scorer:
+        return []
+    return _llm_scorer.get_definitions(display_word)
+
+@st.cache_data(show_spinner=False)
+def get_indicator_suggestions(op, source, _indicator_suggestor):
+    if not _indicator_suggestor:
+        return []
+    
+    from src.utils import clean_source_fodder
+    source_clean = clean_source_fodder(source)
+    words = source_clean.split()
+    
+    return _indicator_suggestor.suggest_indicators(op, words)
+
+@st.cache_data(show_spinner=False)
+def get_fodder_synonyms(source, _indicator_suggestor):
+    if not _indicator_suggestor:
+        return {}
+    
+    from src.corpus import corpus as corpus_obj
+    
+    # suggest_synonyms only needs an object with a .source attribute
+    class MockCandidate:
+        def __init__(self, s): self.source = s
+    
+    return _indicator_suggestor.suggest_synonyms(MockCandidate(source), corpus=corpus_obj)
+
+def get_finder_instance():
+    return get_finder(use_llm_ranking, use_llm_suggestions, use_positional, max_fodder, use_llm_for_positional)
 
 def suggest_full_clue(finder, step, candidate):
     """Uses AI to recommend a full cryptic clue."""
@@ -297,10 +343,9 @@ def suggest_full_clue(finder, step, candidate):
     else:
         len_str = f"({len(target)})"
 
-    # Get definitions and indicators
-    defs = finder.llm_scorer.get_definitions(target)
-    
-    indicators = finder.indicator_suggestor.suggest_for_candidate(step, candidate)
+    # Get definitions and indicators using cached helpers
+    defs = get_definitions(target, finder.llm_scorer)
+    indicators = get_indicator_suggestions(op, source, finder.indicator_suggestor)
     
     prompt = f"""
     You are a cryptic crossword expert. Write a single, elegant cryptic crossword clue for the word or phrase "{target.upper()}".
@@ -407,22 +452,22 @@ def render_clue_details(s, best_c, finder, key_suffix=""):
         st.markdown(html, unsafe_allow_html=True)
         with st.expander("Technical View (Raw)"):
             st.code(pretty(s), language="text")
-    
+
     with t_inds:
         st.markdown("#### 📖 Suggested Indicators")
         if finder.indicator_suggestor:
-            inds = finder.indicator_suggestor.suggest_for_candidate(s, best_c)
+            inds = get_indicator_suggestions(s.op, best_c.source, finder.indicator_suggestor)
             if inds:
                 st.write(", ".join([f"`{i}`" for i in inds]))
             else:
                 st.write("No indicators suggested.")
         else:
             st.write("AI disabled.")
-                    
+
     with t_syns:
         st.markdown("#### 🔄 Fodder Substitutions")
         if finder.indicator_suggestor:
-            syns = finder.indicator_suggestor.suggest_synonyms(best_c, corpus=corpus)
+            syns = get_fodder_synonyms(best_c.source, finder.indicator_suggestor)
             if syns:
                 for word, options in syns.items():
                     st.write(f"**{word}** ➡️ {', '.join([f'`{o}`' for o in options[:5]])}")
@@ -447,6 +492,7 @@ tab_search, tab_favorites, tab_history = st.tabs([
 ])
 
 with tab_search:
+    finder = get_finder_instance()
     if not target_word:
         st.info("👈 Enter a word in the sidebar to start building clues.")
     else:
@@ -456,29 +502,15 @@ with tab_search:
                 st.session_state.is_searching = False
                 st.rerun()
 
-            progress_bar = st.progress(0)
-            progress_text = st.empty()
-            
-            # Create a placeholder for incremental results
-            status_container = st.empty()
-            
-            def update_progress(val, text, partial_steps=None):
-                progress_bar.progress(val)
-                progress_text.text(text)
-                if partial_steps:
-                    st.session_state.all_steps = partial_steps
-                    with status_container.container():
-                        st.caption(f"⚡ Found {len(partial_steps)} patterns so far...")
-                        # Optional: show top 3 results
-                        for s in partial_steps[:3]:
-                            st.write(f"  - {s.op}: {s.best().source}")
-            
-            all_steps = finder.find_all(
-                corpus, 
+            all_steps = get_search_results(
                 target_word, 
-                num_chunks=num_chunks, 
-                enabled_ops=selected_ops_to_run,
-                progress_callback=update_progress
+                num_chunks, 
+                max_fodder, 
+                use_positional, 
+                tuple(selected_ops_to_run), 
+                use_llm_ranking, 
+                use_llm_suggestions, 
+                use_llm_for_positional
             )
             
             st.session_state.all_steps = all_steps
@@ -505,9 +537,6 @@ with tab_search:
                     "steps": all_steps
                 })
             
-            progress_bar.empty()
-            progress_text.empty()
-            status_container.empty()
             st.rerun() # Refresh to show results properly
 
         all_steps = st.session_state.all_steps
@@ -524,7 +553,7 @@ with tab_search:
             # --- Target Definitions (Top of Page) ---
             if finder.llm_scorer:
                 with st.container(border=True):
-                    defs = finder.llm_scorer.get_definitions(display_word)
+                    defs = get_definitions(display_word, finder.llm_scorer)
                     if defs:
                         st.markdown(f"**Definitions for {display_word.upper()}:** " + ", ".join([f"`{d}`" for d in defs]))
                     else:
@@ -652,6 +681,7 @@ with tab_search:
                             render_clue_details(s, best_c, finder, key_suffix=f"search_{i}")
 
 with tab_favorites:
+    finder = get_finder_instance()
     if not st.session_state.starred_clues:
         st.info("No clues starred yet. Click the star icon on any result to save it here.")
     else:

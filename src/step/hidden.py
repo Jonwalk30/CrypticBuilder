@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import List, Tuple
-from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 from src.utils import adjusted_freq
 from src.scoring_config import config
@@ -15,6 +14,7 @@ class HiddenStep(BaseStepGenerator):
         self.w_phrase = kwargs.get("w_phrase", c.get("w_phrase", 1.0))
 
     def generate(self, corpus_obj, target: str, *, limit: int = 200) -> Step:
+        from src.corpus import corpus as corpus_df
         t = str(target).lower()
         step = Step(op=self.name, target=t)
         n = len(t)
@@ -51,10 +51,10 @@ class HiddenStep(BaseStepGenerator):
             if w1_candidates.empty or w2_candidates.empty:
                 continue
                 
-            for _, r1 in w1_candidates.head(50).iterrows():
+            for r1 in w1_candidates.head(50).itertuples(index=False):
                 if r1.entry[0] in t:
                     continue
-                for _, r2 in w2_candidates.head(50).iterrows():
+                for r2 in w2_candidates.head(50).itertuples(index=False):
                     if r2.entry[-1] in t:
                         continue
                     phrase = f"{r1.entry} {r2.entry}"
@@ -87,12 +87,12 @@ class HiddenStep(BaseStepGenerator):
                 r2 = Row()
                 r2.frequency = r2_freq
                 r2.stopword_ratio_entry = r2_stop
-                r2.is_name = r2_is_name
+                r2.is_proper_noun = r2_is_name # Fix attribute name to match _get_adj
                 
-                for _, r1 in w1_candidates.head(30).iterrows():
+                for r1 in w1_candidates.head(30).itertuples(index=False):
                     if r1.entry[0] in t:
                         continue
-                    for _, r3 in w3_candidates.head(30).iterrows():
+                    for r3 in w3_candidates.head(30).itertuples(index=False):
                         if r3.entry[-1] in t:
                             continue
                         phrase = f"{r1.entry} {w2_str} {r3.entry}"
@@ -122,13 +122,13 @@ class HiddenStep(BaseStepGenerator):
                     r3_freq, r3_stop, r3_is_name = word_meta[w3_str]
                     
                     class Row: pass
-                    r2 = Row(); r2.frequency = r2_freq; r2.stopword_ratio_entry = r2_stop; r2.is_name = r2_is_name
-                    r3 = Row(); r3.frequency = r3_freq; r3.stopword_ratio_entry = r3_stop; r3.is_name = r3_is_name
+                    r2 = Row(); r2.frequency = r2_freq; r2.stopword_ratio_entry = r2_stop; r2.is_proper_noun = r2_is_name
+                    r3 = Row(); r3.frequency = r3_freq; r3.stopword_ratio_entry = r3_stop; r3.is_proper_noun = r3_is_name
                     
-                    for _, r1 in w1_candidates.head(20).iterrows():
+                    for r1 in w1_candidates.head(20).itertuples(index=False):
                         if r1.entry[0] in t:
                             continue
-                        for _, r4 in w4_candidates.head(20).iterrows():
+                        for r4 in w4_candidates.head(20).itertuples(index=False):
                             if r4.entry[-1] in t:
                                 continue
                             phrase = f"{r1.entry} {w2_str} {w3_str} {r4.entry}"

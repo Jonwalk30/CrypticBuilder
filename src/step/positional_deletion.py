@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import List, Tuple
-from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 
 class PositionalDeletionStep(BaseStepGenerator):
@@ -11,6 +10,7 @@ class PositionalDeletionStep(BaseStepGenerator):
         super().__init__("positional_deletion", **kwargs)
 
     def generate(self, corpus, target: str, *, limit: int = 200, forbidden_source: str | None = None, llm_scorer=None) -> Step:
+        from src.corpus import corpus as corpus_df
         t = str(target).lower()
         step = Step(op=self.name, target=t)
         if not t:
@@ -27,8 +27,8 @@ class PositionalDeletionStep(BaseStepGenerator):
         # Source length n+1
         mask_behead = (df_candidates["entry"].str.len() == n + 1) & (df_candidates["entry"].str.endswith(t))
         hits_behead = df_candidates[mask_behead]
-        for _, row in hits_behead.iterrows():
-            w = str(row["entry"])
+        for row in hits_behead.itertuples(index=False):
+            w = str(row.entry)
             adj = self._get_adj(row)
             
             cost = (20.0 - adj) + self.op_penalty
@@ -39,8 +39,8 @@ class PositionalDeletionStep(BaseStepGenerator):
         # Source length n+1
         mask_curtail = (df_candidates["entry"].str.len() == n + 1) & (df_candidates["entry"].str.startswith(t))
         hits_curtail = df_candidates[mask_curtail]
-        for _, row in hits_curtail.iterrows():
-            w = str(row["entry"])
+        for row in hits_curtail.itertuples(index=False):
+            w = str(row.entry)
             adj = self._get_adj(row)
             
             cost = (20.0 - adj) + self.op_penalty
@@ -52,8 +52,8 @@ class PositionalDeletionStep(BaseStepGenerator):
         if n % 2 == 1:
             mask_heart = (df_candidates["entry"].str.len() == n + 2) & (df_candidates["entry"].str.slice(1, -1) == t)
             hits_heart = df_candidates[mask_heart]
-            for _, row in hits_heart.iterrows():
-                w = str(row["entry"])
+            for row in hits_heart.itertuples(index=False):
+                w = str(row.entry)
                 adj = self._get_adj(row)
                 
                 cost = (20.0 - adj) + self.op_penalty
@@ -72,8 +72,8 @@ class PositionalDeletionStep(BaseStepGenerator):
                           (df_candidates["entry"].str.startswith(prefix)) & \
                           (df_candidates["entry"].str.endswith(suffix))
             hits_gutted = df_candidates[mask_gutted]
-            for _, row in hits_gutted.iterrows():
-                w = str(row["entry"])
+            for row in hits_gutted.itertuples(index=False):
+                w = str(row.entry)
                 # The produced string is always the first and last letters.
                 # Since n == 2 and we matched prefix/suffix, t is already w[0]+w[-1].
                 adj = self._get_adj(row)

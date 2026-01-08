@@ -63,9 +63,17 @@ class BaseStepGenerator:
 
     def _get_adj(self, row) -> float:
         from src.utils import adjusted_freq
-        is_n = bool(row["is_proper_noun"]) if "is_proper_noun" in (row.index if hasattr(row, 'index') else row.keys()) else False
-        return adjusted_freq(float(row["frequency"]), float(row["stopword_ratio_entry"]),
-                             self.stopword_penalty, self.stopword_power, is_proper_noun=is_n)
+        if hasattr(row, 'is_proper_noun'):
+            is_n = bool(row.is_proper_noun)
+            freq = float(row.frequency)
+            stop = float(row.stopword_ratio_entry)
+        else:
+            # Fallback for Series or dict
+            is_n = bool(row["is_proper_noun"]) if "is_proper_noun" in (row.index if hasattr(row, 'index') else row.keys()) else False
+            freq = float(row["frequency"])
+            stop = float(row["stopword_ratio_entry"])
+            
+        return adjusted_freq(freq, stop, self.stopword_penalty, self.stopword_power, is_proper_noun=is_n)
 
     def _get_word_adj(self, corpus, word: str) -> Optional[float]:
         df = corpus.corpus

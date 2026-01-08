@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Tuple, List
-from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 from src.utils import adjusted_freq, sort_word, get_word_display
 from src.scoring_config import config
@@ -22,6 +21,7 @@ class WordInsertionStep(BaseStepGenerator):
         }
 
     def generate(self, corpus, target: str, *, limit: int = 200, llm_scorer=None) -> Step:
+        from src.corpus import corpus as corpus_df
         t = str(target).lower()
         step = Step(op=self.name, target=t)
         n = len(t)

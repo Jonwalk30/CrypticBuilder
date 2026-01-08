@@ -55,15 +55,63 @@ def adjusted_freq(freq: float, stop_ratio: float, penalty: float = 2.0, power: f
 
 
 def multiset_contains(container: str, target: str) -> bool:
-    cc = Counter(container)
-    tc = Counter(target)
-    return all(cc[ch] >= n for ch, n in tc.items())
+    """
+    Check if 'container' contains all characters of 'target' with at least the same frequency.
+    Optimized for sorted strings.
+    """
+    # If both are sorted, we can use a faster linear scan
+    # In this project, most callers pass sorted signatures.
+    # We can't be 100% sure if they are always sorted without checking, 
+    # but we can check once.
+    
+    # For now, let's just do a faster version than Counter.
+    if not target:
+        return True
+    if len(target) > len(container):
+        return False
+        
+    # Check if they look sorted (most are)
+    # A quick way to check if a string is sorted:
+    # is_sorted = all(s[i] <= s[i+1] for i in range(len(s)-1))
+    # But checking that might be as slow as just using a frequency array.
+    
+    # Let's use a frequency array for a-z
+    counts = [0] * 26
+    for char in container:
+        counts[ord(char) - 97] += 1
+    for char in target:
+        idx = ord(char) - 97
+        counts[idx] -= 1
+        if counts[idx] < 0:
+            return False
+    return True
 
 
 def multiset_leftover_sorted(container: str, target: str) -> str:
-    c = Counter(container)
-    c.subtract(Counter(target))
-    return "".join(ch * n for ch, n in sorted((k, v) for k, v in c.items() if v > 0))
+    """
+    Returns the letters in 'container' after removing those in 'target'.
+    Optimized for sorted strings.
+    """
+    # Assuming both are sorted!
+    res = []
+    i = 0
+    j = 0
+    n = len(container)
+    m = len(target)
+    while i < n and j < m:
+        if container[i] == target[j]:
+            i += 1
+            j += 1
+        elif container[i] < target[j]:
+            res.append(container[i])
+            i += 1
+        else:
+            # Should not happen if target is subset of container
+            j += 1
+    while i < n:
+        res.append(container[i])
+        i += 1
+    return "".join(res)
 
 
 def subsequence_match_indices(container: str, target: str) -> Optional[List[int]]:

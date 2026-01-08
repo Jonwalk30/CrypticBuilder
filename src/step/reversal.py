@@ -1,5 +1,4 @@
 from __future__ import annotations
-from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
 from src.utils import get_word_display
 
@@ -10,6 +9,7 @@ class ReversalStep(BaseStepGenerator):
         super().__init__("reversal", **kwargs)
 
     def generate(self, corpus, target: str, *, limit: int = 200, forbidden_source: str | None = None, llm_scorer=None) -> Step:
+        from src.corpus import corpus as corpus_df
         t = str(target).lower()
         rev_t = t[::-1]
         step = Step(op=self.name, target=t)
@@ -21,8 +21,8 @@ class ReversalStep(BaseStepGenerator):
         # Find words that are the reverse of the target
         hits = df[df["entry"] == rev_t]
 
-        for _, row in hits.iterrows():
-            w = str(row["entry"])
+        for row in hits.itertuples(index=False):
+            w = str(row.entry)
             
             # GOLF SCORING
             adj = self._get_adj(row)

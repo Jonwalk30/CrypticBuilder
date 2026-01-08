@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Tuple, List
 from collections import Counter
 
-from src.corpus import corpus as corpus_df
 from src.step.step import Strictness, Step, Candidate, BaseStepGenerator
 from src.utils import adjusted_freq, best_leftover_meta, sort_word, subsequence_match_indices, leftover_from_indices, \
     multiset_contains, multiset_leftover_sorted, get_word_display
@@ -39,7 +38,7 @@ class WordDeletionStep(BaseStepGenerator):
 
     def _score(self, corpus, row, leftover_sorted: str, strictness: Strictness, target: str, llm_scorer=None) -> tuple[float, Tuple[str, ...], dict[str, float]]:
         cont_adj = self._get_adj(row)
-        container = str(row["entry"])
+        container = str(row.entry) if hasattr(row, 'entry') else str(row["entry"])
 
         leftover_words, lo_best_freq, lo_best_stop, lo_is_name = best_leftover_meta(corpus, leftover_sorted)
         lo_adj = adjusted_freq(lo_best_freq, lo_best_stop, self.stopword_penalty, self.stopword_power, is_proper_noun=lo_is_name) if lo_best_freq > 0 else 0.0
@@ -80,6 +79,7 @@ class WordDeletionStep(BaseStepGenerator):
         return cost, leftover_words, detailed
 
     def generate(self, corpus, target: str, *, limit: int = 200, forbidden_source: str | None = None, llm_scorer=None) -> Step:
+        from src.corpus import corpus as corpus_df
         t = str(target).lower()
         df = corpus_df.corpus
         step = Step(op=self.name, target=t)
@@ -95,11 +95,11 @@ class WordDeletionStep(BaseStepGenerator):
         # 2) SUBSEQUENCE (scan limited)
         scanned = 0
         df_seq = df2[df2["entry"].str.contains(t[0], regex=False) & df2["entry"].str.contains(t[-1], regex=False)]
-        for _, row in df_seq.iterrows():
+        for row in df_seq.itertuples(index=False):
             scanned += 1
             if scanned > self.max_scan:
                 break
-            container = str(row["entry"])
+            container = str(row.entry)
             
             # Exclude substring matches as they are "too easy and boring"
             if container.find(t) != -1:
@@ -136,11 +136,11 @@ class WordDeletionStep(BaseStepGenerator):
 
         # 3) MULTISET (scan limited)
         scanned = 0
-        for _, row in df2.iterrows():
+        for row in df2.itertuples(index=False):
             scanned += 1
             if scanned > self.max_scan:
                 break
-            container = str(row["entry"])
+            container = str(row.entry)
             
             # Exclude substring matches
             if container.find(t) != -1:
@@ -218,6 +218,7 @@ class LetterDeletionStep(BaseStepGenerator):
         self.w_container = kwargs.get("w_container", c.get("w_container", 1.0))
 
     def generate(self, corpus, target: str, *, limit: int = 200, forbidden_source: str | None = None, llm_scorer=None) -> Step:
+        from src.corpus import corpus as corpus_df
         t = str(target).lower()
         df = corpus_df.corpus
         step = Step(op=self.name, target=t)
@@ -232,28 +233,32 @@ class LetterDeletionStep(BaseStepGenerator):
         # 1. Positional Deletions (First, Last, First & Last)
         # Beheaded: container[1:] == t
         mask_behead = (possible_containers["entry"].str.len() == n + 1) & (possible_containers["entry"].str.endswith(t))
-        for _, row in possible_containers[mask_behead].iterrows():
+        for row in possible_containers[mask_behead].itertuples(index=False):
             adj = self._get_adj(row)
             cost = self.w_container * (20.0 - adj) + self.op_penalty
-            step.candidates.append(Candidate(source=f"{row['entry']} (beheaded)", produced=t, score=cost, strictness="SUBSTRING", detailed_scores={"freq": round(adj, 2)}))
+            step.candidates.append(Candidate(source=f"{row.entry} (beheaded)", produced=t, score=cost, strictness="SUBSTRING", detailed_scores={"freq": round(adj, 2)}))
 
         # Curtailed: container[:-1] == t
         mask_curtail = (possible_containers["entry"].str.len() == n + 1) & (possible_containers["entry"].str.startswith(t))
-        for _, row in possible_containers[mask_curtail].iterrows():
+        for row in possible_containers[mask_curtail].itertuples(index=False):
             adj = self._get_adj(row)
             cost = self.w_container * (20.0 - adj) + self.op_penalty
-            step.candidates.append(Candidate(source=f"{row['entry']} (curtailed)", produced=t, score=cost, strictness="SUBSTRING", detailed_scores={"freq": round(adj, 2)}))
+            step.candidates.append(Candidate(source=f"{row.entry} (curtailed)", produced=t, score=cost, strictness="SUBSTRING", detailed_scores={"freq": round(adj, 2)}))
 
         # Heart: container[1:-1] == t
         mask_heart = (possible_containers["entry"].str.len() == n + 2) & (possible_containers["entry"].str.slice(1, -1) == t)
-        for _, row in possible_containers[mask_heart].iterrows():
+        for row in possible_containers[mask_heart].itertuples(index=False):
             adj = self._get_adj(row)
             cost = self.w_container * (20.0 - adj) + self.op_penalty
-            step.candidates.append(Candidate(source=f"{row['entry']} (heart)", produced=t, score=cost, strictness="SUBSTRING", detailed_scores={"freq": round(adj, 2)}))
+            step.candidates.append(Candidate(source=f"{row.entry} (heart)", produced=t, score=cost, strictness="SUBSTRING", detailed_scores={"freq": round(adj, 2)}))
 
         # 2. Letter removal (removing all instances of a single letter)
-        for _, row in possible_containers.iterrows():
-            container = str(row["entry"])
+        scanned = 0
+        for row in possible_containers.itertuples(index=False):
+            scanned += 1
+            if scanned > 50000:
+                break
+            container = str(row.entry)
             if len(step.candidates) >= limit * 2:
                 break
             
