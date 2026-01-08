@@ -1,18 +1,23 @@
-[project]
+[tool.poetry]
 name = "cryptic-assistant"
 version = "0.1.0"
 description = "Cryptic crossword writing assistant"
-requires-python = ">=3.10"
+authors = ["Your Name <you@example.com>"]
+package-mode = false
 
-dependencies = [
-    "pandas",
-    "wordfreq",
-    "openai",
-    "streamlit",
-    "toml",
-    "pyarrow",
-    "PyYAML",
-]
+[tool.poetry.dependencies]
+python = ">=3.10"
+pandas = "*"
+wordfreq = "*"
+openai = "*"
+streamlit = "*"
+toml = "*"
+pyarrow = "*"
+PyYAML = "*"
 
 [tool.black]
 line-length = 88
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
