@@ -1,0 +1,15 @@
+[project]
+name = "cryptic-assistant"
+version = "0.1.0"
+description = "Cryptic crossword writing assistant"
+requires-python = ">=3.10"
+
+dependencies = [
+    "pandas",
+    "wordfreq",
+    "openai",
+    "streamlit",
+]
+
+[tool.black]
+line-length = 88

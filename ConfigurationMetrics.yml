@@ -1,0 +1,80 @@
+common:
+  stopword_penalty: 2.0
+  stopword_power: 1.0
+  llm_weight: 30.0
+
+anagram:
+  op_penalty: 2.0
+  allow_identity: false
+
+word_deletion:
+  op_penalty: 15.0
+  w_container: 1.0
+  w_leftover: 1.0
+  unresolved_leftover_penalty_per_char: 5.0
+  short_leftover_penalty: 2.0
+  obvious_placement_penalty: 15.0
+  max_scan: 50000
+  prefer_stricter: true
+  substring_bonus: -5.0
+  subsequence_bonus: 10.0
+  multiset_bonus: 5.0
+
+letter_deletion:
+  op_penalty: 30.0
+  w_container: 1.0
+
+first_letters:
+  op_penalty: 25.0
+  per_word_penalty: 5.0
+  max_per_letter: 50
+
+reversal:
+  op_penalty: 1.0
+
+charade:
+  op_penalty: 1.0
+  w_word: 1.0
+  short_word_penalty: 0.5
+
+letter_replacement:
+  op_penalty: 25.0
+  w_source: 1.0
+  base_replacement_bonus: 0.0
+  multi_replacement_exponent: 2.5
+
+hidden:
+  op_penalty: 40.0
+  w_phrase: 1.0
+
+word_insertion:
+  op_penalty: 2.0
+  w_outer: 1.0
+  w_inner: 1.0
+  short_word_penalty: 1.0
+  substring_bonus: 5.0
+  multiset_bonus: -5.0
+
+substitution:
+  op_penalty: 5.0
+
+concat:
+  op_penalty: 20.0
+  per_chunk_penalty: 10.0
+  max_chunks: 4
+
+alternating_letters:
+  op_penalty: 1.2
+
+last_letters:
+  op_penalty: 25.0
+  per_word_penalty: 5.0
+  max_per_letter: 50
+
+middle_letter:
+  op_penalty: 50.0
+  per_word_penalty: 5.0
+  max_per_letter: 50
+
+positional_deletion:
+  op_penalty: 10.0
