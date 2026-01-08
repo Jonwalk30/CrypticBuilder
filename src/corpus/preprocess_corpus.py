@@ -1,6 +1,7 @@
 # cryptic/preprocess_corpus.py
 import json
 import pandas as pd
+import os
 
 from src.utils import normalize, sort_word, global_frequency, is_stopword_entry, stopword_ratio
 
@@ -48,13 +49,13 @@ def preprocess_wordlist_csv(
     Preprocess a one-column wordlist CSV into a fast parquet + optional anagram index.
     """
     # Try to load robustly:
-    try:
-        df = pd.read_csv(csv_path, header=None, names=["entry"])
-    except Exception:
-        df = pd.read_csv(csv_path).rename(columns={"A": "entry"})
-
-    if "entry" not in df.columns:
-        df = pd.read_csv(csv_path).rename(columns={"A": "entry"})
+    if csv_path and os.path.exists(csv_path):
+        try:
+            df = pd.read_csv(csv_path, header=None, names=["entry"])
+        except Exception:
+            df = pd.read_csv(csv_path).rename(columns={"A": "entry"})
+    else:
+        df = pd.DataFrame(columns=["entry"])
 
     df = df.dropna()
     df["entry"] = df["entry"].astype(str).apply(normalize)

@@ -262,6 +262,3 @@ class Corpus:
                     subs[key] = []
                 subs[key].append(val)
         return subs
-# Global instance for easy access
-parquet_path = os.getenv("CORPUS_PARQUET_PATH", "corpus.parquet")
-corpus = Corpus.from_parquet(parquet_path)
