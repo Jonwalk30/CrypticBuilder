@@ -102,16 +102,11 @@ class CharadeStep(BaseStepGenerator):
         if not llm_scorer:
             return
         
-        # Charade source is "w1 + w2" or "w1 + w2 + w3" or "entry (w1 + w2)"
-        source = candidate.source
-        if " (" in source:
-            source = source.split(" (")[1].rstrip(")")
-        
-        # Replace " + " with space for coherence check
-        phrase = source.replace(" + ", " ")
-        words = phrase.split()
+        from src.utils import clean_source_fodder
+        source_clean = clean_source_fodder(candidate.source)
+        words = source_clean.split()
         if len(words) > 1:
-            coherence = llm_scorer.score_coherence(phrase)
+            coherence = llm_scorer.score_coherence(source_clean)
             
             bonus = coherence * self.llm_weight
             candidate.score -= bonus

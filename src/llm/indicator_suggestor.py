@@ -80,21 +80,13 @@ class IndicatorSuggestor:
         # Check if we have a better surface reading from synonyms
         source = candidate.detailed_scores.get("best_surface", candidate.source)
         
-        # Remove markers like (beheaded), (even), etc.
-        import re
-        source_clean = re.sub(r"\s*\(.*?\)", "", source)
-        
-        # Split into words, keeping phrases
-        if " + " in source_clean:
-            words = source_clean.split(" + ")
-        elif " in " in source_clean:
-            words = source_clean.split(" in ")
-        else:
-            words = source_clean.split()
+        from src.utils import clean_source_fodder
+        source_clean = clean_source_fodder(source)
+        words = source_clean.split()
             
         op = step.op
         # Special case for advanced charades (insertions)
-        if op == "CHARADE" and " in " in source_clean:
+        if op == "CHARADE" and " in " in candidate.source:
             op = "WORD_INSERTION"
             
         return self.suggest_indicators(op, words)
@@ -103,8 +95,8 @@ class IndicatorSuggestor:
         """
         Suggests synonyms for fodder words that could be used for substitutions.
         """
-        import re
-        source_clean = re.sub(r"\s*\(.*?\)", "", candidate.source).replace("+", " ").replace(" in ", " ")
+        from src.utils import clean_source_fodder
+        source_clean = clean_source_fodder(candidate.source)
         words = source_clean.split()
         
         results = {}

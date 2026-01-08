@@ -188,14 +188,20 @@ class WordDeletionStep(BaseStepGenerator):
         
         # Use the best leftover word for context with the container
         best_lo = candidate.leftover_words[0].split(" (")[0]
-        container = candidate.source
         
-        # Check context (ONLY original words)
-        context = llm_scorer.get_contextual_score(container, best_lo)
+        from src.utils import clean_source_fodder
+        source_clean = clean_source_fodder(candidate.source)
+        # For deletions like "container - removed", we want context between container and removed
+        # source_clean will be "container removed"
+        parts = source_clean.split()
+        if len(parts) >= 2:
+            container = parts[0]
+            # Check context (ONLY original words)
+            context = llm_scorer.get_contextual_score(container, best_lo)
 
-        bonus = context * self.llm_weight
-        candidate.score -= bonus
-        candidate.detailed_scores["llm_context"] = round(context, 3)
+            bonus = context * self.llm_weight
+            candidate.score -= bonus
+            candidate.detailed_scores["llm_context"] = round(context, 3)
         
         # Also check for definition context
         super().apply_llm(candidate, llm_scorer, corpus, target_synonyms)

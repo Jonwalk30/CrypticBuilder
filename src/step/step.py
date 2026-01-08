@@ -82,13 +82,12 @@ class BaseStepGenerator:
         if not llm_scorer:
             return
 
-        source = candidate.source
-        # Strip markers like (beheaded), (even), (-S), etc.
-        source_clean = source.split(" (")[0]
+        from src.utils import clean_source_fodder
+        source_clean = clean_source_fodder(candidate.source)
         target = candidate.produced
 
         # 1. Context bonus (using the words themselves)
-        words = source_clean.replace("+", " ").replace(" in ", " ").split()
+        words = source_clean.split()
         
         # Check context score for the whole cleaned source against target
         best_context_score = llm_scorer.get_contextual_score(source_clean, target)

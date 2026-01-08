@@ -142,10 +142,12 @@ class HiddenStep(BaseStepGenerator):
         if not llm_scorer:
             return
         
-        words = candidate.source.split()
+        from src.utils import clean_source_fodder
+        source_clean = clean_source_fodder(candidate.source)
+        words = source_clean.split()
         # For hidden words, we care about the coherence of the phrase
         if len(words) > 1:
-            coherence = llm_scorer.score_coherence(candidate.source)
+            coherence = llm_scorer.score_coherence(source_clean)
             
             bonus = coherence * self.llm_weight
             candidate.score -= bonus

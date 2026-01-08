@@ -135,6 +135,39 @@ def best_leftover_meta(corpus, leftover_sorted: str) -> tuple[Tuple[str, ...], f
             bool(meta.get("best_is_proper_noun", False)))
 
 
+def clean_source_fodder(source: str) -> str:
+    """
+    Cleans a wordplay source string to leave only potential fodder words.
+    Removes operational markers (like '(beheaded)', '(even)') and structural 
+    symbols (+, -, in, [], ()) while preserving the words within them.
+    """
+    import re
+    # 1. Remove common operation markers that are NOT fodder
+    markers = [
+        r"\(beheaded\)", r"\(curtailed\)", r"\(heart\)", r"\(gutted\)", 
+        r"\(even\)", r"\(odd\)", 
+        r"\(subst\. .*?\)",
+        r"\(-[A-Z]+s?\)",
+        r"\(.*?\->.*?\)", # for LETTER_REPLACEMENT e.g. (E->A)
+        r"\(subst\. avail\)"
+    ]
+    cleaned = source
+    for m in markers:
+        cleaned = re.sub(m, "", cleaned, flags=re.IGNORECASE)
+    
+    # Remove asterisk markers often used for substitutions
+    cleaned = cleaned.replace("*", "")
+    
+    # 2. Handle specific structural words
+    cleaned = cleaned.replace(" + ", " ").replace(" in ", " ").replace(" - ", " ")
+    
+    # 3. Strip remaining structural symbols but keep content
+    for char in "[]()":
+        cleaned = cleaned.replace(char, " ")
+        
+    return cleaned.strip()
+
+
 def pretty(step: Step, indent: str = "  ") -> str:
     lines: List[str] = []
 
