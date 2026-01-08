@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Tuple
 from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
-from src.utils import adjusted_freq
+from src.utils import adjusted_freq, get_word_display
 from src.scoring_config import config
 
 class CharadeStep(BaseStepGenerator):
@@ -54,7 +54,7 @@ class CharadeStep(BaseStepGenerator):
                 
                 candidates_found.append(
                     Candidate(
-                        source=f"{w1} + {w2}",
+                        source=f"{get_word_display(corpus, w1)} + {get_word_display(corpus, w2)}",
                         produced=t,
                         score=cost,
                         strictness="SUBSTRING"
@@ -88,7 +88,7 @@ class CharadeStep(BaseStepGenerator):
                         
                         candidates_found.append(
                             Candidate(
-                                source=f"{w1} + {w2} + {w3}",
+                                source=f"{get_word_display(corpus, w1)} + {get_word_display(corpus, w2)} + {get_word_display(corpus, w3)}",
                                 produced=t,
                                 score=cost,
                                 strictness="SUBSTRING"
@@ -139,10 +139,10 @@ class CharadeStep(BaseStepGenerator):
             entry = str(row["entry"])
             if entry.startswith(t):
                 other = entry[len(t):]
-                source = f"{t} + {other}"
+                source = f"{get_word_display(corpus, t)} + {get_word_display(corpus, other)}"
             else:
                 other = entry[:-len(t)]
-                source = f"{other} + {t}"
+                source = f"{get_word_display(corpus, other)} + {get_word_display(corpus, t)}"
             
             # The 'other' part MUST be a literal word in the corpus
             adj_other = self._get_word_adj(corpus, other)

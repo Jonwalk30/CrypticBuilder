@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Tuple, List
 from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
-from src.utils import adjusted_freq, sort_word
+from src.utils import adjusted_freq, sort_word, get_word_display
 from src.scoring_config import config
 
 class WordInsertionStep(BaseStepGenerator):
@@ -64,11 +64,11 @@ class WordInsertionStep(BaseStepGenerator):
                 is_sub = inner_raw in corpus.substitutions
                 
                 # Format inner word words
-                final_inner_words = list(possible_inner_words)
+                final_inner_words = [get_word_display(corpus, w) for w in possible_inner_words]
                 
                 # If it's a substitution word but not in corpus, add it to final_inner_words
                 if is_sub and inner_raw not in possible_inner_words:
-                    final_inner_words.append(inner_raw)
+                    final_inner_words.append(get_word_display(corpus, inner_raw))
 
                 # Get best inner word meta for scoring
                 # We use the literal one if it exists, else the best frequency one
@@ -115,10 +115,11 @@ class WordInsertionStep(BaseStepGenerator):
                 # Source display: if it's literal, use the literal. 
                 # If it's multiset, show the word in parentheses.
                 best_inner = final_inner_words[0]
+                outer_display = get_word_display(corpus, outer)
                 if strictness == "SUBSTRING":
-                    source = f"{best_inner} in {outer}"
+                    source = f"{best_inner} in {outer_display}"
                 else:
-                    source = f"({best_inner}) in {outer}"
+                    source = f"({best_inner}) in {outer_display}"
 
                 cand = Candidate(
                     source=source,

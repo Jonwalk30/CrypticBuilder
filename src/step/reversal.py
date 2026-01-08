@@ -1,6 +1,7 @@
 from __future__ import annotations
 from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
+from src.utils import get_word_display
 
 class ReversalStep(BaseStepGenerator):
     name = "REVERSAL"
@@ -29,7 +30,7 @@ class ReversalStep(BaseStepGenerator):
             cost = (20.0 - adj) + self.op_penalty
             detailed = {"freq": round(adj, 2)}
 
-            step.candidates.append(Candidate(source=w, produced=t, score=cost, strictness="SUBSTRING", detailed_scores=detailed))
+            step.candidates.append(Candidate(source=get_word_display(corpus, w), produced=t, score=cost, strictness="SUBSTRING", detailed_scores=detailed))
 
             if len(step.candidates) >= limit:
                 break

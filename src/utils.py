@@ -85,6 +85,12 @@ def leftover_from_indices(container: str, used_indices: List[int]) -> str:
     return "".join(ch for i, ch in enumerate(container) if i not in used)
 
 
+def get_word_display(corpus, word: str) -> str:
+    if corpus and word in corpus.substitutions:
+        return f"{word} (subst. {', '.join(corpus.substitutions[word][:2])})"
+    return word
+
+
 def best_leftover_meta(corpus, leftover_sorted: str) -> tuple[Tuple[str, ...], float, float, bool]:
     words = list(corpus._anagram_words_sorted.get(leftover_sorted, []))
     
@@ -126,7 +132,7 @@ def best_leftover_meta(corpus, leftover_sorted: str) -> tuple[Tuple[str, ...], f
                 all_potential_words.append(k)
 
     # Now format them
-    final_words = all_potential_words
+    final_words = [get_word_display(corpus, w) for w in all_potential_words]
 
     meta = corpus._anagram_best.get(leftover_sorted) or {}
     return (tuple(final_words),

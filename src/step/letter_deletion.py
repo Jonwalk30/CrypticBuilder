@@ -6,7 +6,7 @@ from collections import Counter
 from src.corpus import corpus as corpus_df
 from src.step.step import Strictness, Step, Candidate, BaseStepGenerator
 from src.utils import adjusted_freq, best_leftover_meta, sort_word, subsequence_match_indices, leftover_from_indices, \
-    multiset_contains, multiset_leftover_sorted
+    multiset_contains, multiset_leftover_sorted, get_word_display
 from src.scoring_config import config
 
 class WordDeletionStep(BaseStepGenerator):
@@ -118,8 +118,9 @@ class WordDeletionStep(BaseStepGenerator):
                 continue
             
             # Format source to show subtraction: container - removed
-            removed = leftover_words[0].split(" (")[0]
-            source_display = f"{container} - [{removed}]"
+            container_display = get_word_display(corpus, container)
+            removed_display = leftover_words[0]
+            source_display = f"{container_display} - [{removed_display}]"
 
             step.candidates.append(
                 Candidate(
@@ -158,8 +159,9 @@ class WordDeletionStep(BaseStepGenerator):
                 continue
 
             # Format source to show subtraction: container - removed
-            removed = leftover_words[0].split(" (")[0]
-            source_display = f"{container} - ({removed})"
+            container_display = get_word_display(corpus, container)
+            removed_display = leftover_words[0]
+            source_display = f"{container_display} - ({removed_display})"
 
             step.candidates.append(
                 Candidate(

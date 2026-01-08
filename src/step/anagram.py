@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List
 from src.corpus import corpus as corpus_df
 from src.step.step import Step, Candidate, BaseStepGenerator
-from src.utils import sort_word, adjusted_freq
+from src.utils import sort_word, adjusted_freq, get_word_display
 from src.scoring_config import config
 
 class AnagramStep(BaseStepGenerator):
@@ -42,7 +42,7 @@ class AnagramStep(BaseStepGenerator):
 
             strictness = "SUBSTRING" if w == t else "MULTISET"
             detailed = {"freq": round(adj, 2)}
-            candidates.append(Candidate(source=w, produced=t, score=cost, strictness=strictness, detailed_scores=detailed))
+            candidates.append(Candidate(source=get_word_display(corpus, w), produced=t, score=cost, strictness=strictness, detailed_scores=detailed))
 
         # 2. Multi-word anagrams (2-4 words)
         if max_fodder_words > 1:
@@ -133,7 +133,7 @@ class AnagramStep(BaseStepGenerator):
         
         final_candidates = []
         for combo, cost, detailed in combinations:
-            source = " ".join(combo)
+            source = " ".join([get_word_display(corpus, w) for w in combo])
             # Skip if it's just a literal split (no letters reordered)
             if "".join(combo) == target:
                 continue

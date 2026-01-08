@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from src.step.step import Step, Candidate, BaseStepGenerator
+from src.utils import get_word_display
 
 class SubstitutionStep(BaseStepGenerator):
     name = "SUBSTITUTION"
@@ -18,7 +19,7 @@ class SubstitutionStep(BaseStepGenerator):
 
         candidates = []
         if t in corpus_obj.substitutions:
-            source = t
+            source = get_word_display(corpus_obj, t)
             candidates.append(
                 Candidate(
                     source=source,

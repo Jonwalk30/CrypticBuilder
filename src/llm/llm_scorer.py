@@ -15,6 +15,21 @@ class LLMScorer:
         self.api_call_count = 0
         self.executor = ThreadPoolExecutor(max_workers=10)
         api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            # Fallback to secrets.toml
+            try:
+                import toml
+                if os.path.exists("secrets.toml"):
+                    with open("secrets.toml", "r") as f:
+                        secrets = toml.load(f)
+                        api_key = secrets.get("OPENAI_API_KEY")
+                elif os.path.exists(".streamlit/secrets.toml"):
+                    with open(".streamlit/secrets.toml", "r") as f:
+                        secrets = toml.load(f)
+                        api_key = secrets.get("OPENAI_API_KEY")
+            except Exception:
+                pass
+
         if api_key:
             self.client = OpenAI(api_key=api_key)
         else:
